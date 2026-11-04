@@ -1,0 +1,38 @@
+name: Publish portfolio
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Copy published portfolio
+        env:
+          SOURCE: https://zhidustheartist.ogden-burchjfb.chatgpt.site
+        run: |
+          set -euo pipefail
+          mkdir -p public/assets
+          fetch() { curl --fail --silent --show-error --location --retry 3 --max-time 90 "$SOURCE/$1" --output "public/$1"; }
+          for file in index.html app.js style.css works.json; do fetch "$file"; done
+          for file in orbit-star.svg orbit-mask.svg navigation-star.svg; do fetch "assets/$file"; done
+          jq -r ".[] | .image, (.fileVideo // empty)" public/works.json > media-list.txt
+          while IFS= read -r file; do
+            [[ "$file" =~ ^assets/(work-[0-9]+\.jpg|video-[0-9]+\.mp4)$ ]] || exit 1
+            fetch "$file"
+          done < media-list.txt
+          grep -q "zhidustheartist — portfolio" public/index.html
+          node --check public/app.js
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: public
+      - uses: actions/deploy-pages@v4
+        id: deployment
